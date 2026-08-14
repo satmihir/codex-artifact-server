@@ -1,0 +1,242 @@
+openapi: 3.1.0
+info:
+  title: Codex Artifact Server
+  version: 0.1.0
+  description: A local, authenticated service for Codex text responses and durable image artifacts.
+servers:
+  - url: http://127.0.0.1:4319
+security:
+  - bearerAuth: []
+paths:
+  /v1/health:
+    get:
+      summary: Inspect server and queue health
+      responses:
+        "200":
+          description: Server health
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Health"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /v1/text:
+    post:
+      summary: Generate a synchronous text response
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [prompt]
+              properties:
+                prompt:
+                  type: string
+                  minLength: 1
+                  maxLength: 20000
+                responseSchema:
+                  type: object
+                  description: Optional JSON Schema for a structured response.
+      responses:
+        "200":
+          description: Codex response
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [text, model]
+                properties:
+                  text: { type: string }
+                  responseId: { type: [string, "null"] }
+                  model: { type: string }
+                  usage: { type: [object, "null"] }
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /v1/images:
+    post:
+      summary: Enqueue an image artifact
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [prompt]
+              properties:
+                id:
+                  type: string
+                  maxLength: 160
+                  pattern: "^[A-Za-z0-9:_-]+$"
+                prompt:
+                  type: string
+                  minLength: 1
+                  maxLength: 20000
+                aspectRatio:
+                  type: string
+                  enum: ["1:1", "3:4", "3:2"]
+                  default: "1:1"
+                image:
+                  type: array
+                  maxItems: 8
+                  items:
+                    type: string
+                    format: binary
+      responses:
+        "202":
+          description: Job accepted or an idempotent existing job returned
+          headers:
+            Location:
+              schema: { type: string }
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [job]
+                properties:
+                  job:
+                    $ref: "#/components/schemas/Job"
+        "400":
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "413":
+          $ref: "#/components/responses/Error"
+        "415":
+          $ref: "#/components/responses/Error"
+  /v1/jobs/{jobId}:
+    parameters:
+      - $ref: "#/components/parameters/JobId"
+    get:
+      summary: Get image job status
+      responses:
+        "200":
+          description: Current job state
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [job]
+                properties:
+                  job:
+                    $ref: "#/components/schemas/Job"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/Error"
+    delete:
+      summary: Acknowledge and delete a terminal job and all of its files
+      responses:
+        "200":
+          description: Job deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [deleted, id]
+                properties:
+                  deleted: { const: true }
+                  id: { type: string }
+        "409":
+          description: Job is active or its result is being streamed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+  /v1/jobs/{jobId}/result:
+    parameters:
+      - $ref: "#/components/parameters/JobId"
+    get:
+      summary: Stream completed image bytes
+      responses:
+        "200":
+          description: PNG image artifact
+          headers:
+            ETag:
+              schema: { type: string }
+            Content-Length:
+              schema: { type: integer }
+          content:
+            image/png:
+              schema:
+                type: string
+                format: binary
+        "409":
+          description: Job is not complete
+          headers:
+            Retry-After:
+              schema: { type: integer }
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+  parameters:
+    JobId:
+      in: path
+      name: jobId
+      required: true
+      schema:
+        type: string
+        maxLength: 160
+        pattern: "^[A-Za-z0-9:_-]+$"
+  schemas:
+    Health:
+      type: object
+      required: [ready, provider, model, imageConcurrency, activeImages, queuedImages, retainedJobs]
+      properties:
+        ready: { const: true }
+        provider: { const: codex_sdk }
+        model: { type: string }
+        imageConcurrency: { type: integer }
+        activeImages: { type: integer }
+        queuedImages: { type: integer }
+        retainedJobs: { type: integer }
+    Job:
+      type: object
+      required: [id, kind, status, model, createdAt, updatedAt]
+      properties:
+        id: { type: string }
+        kind: { const: image }
+        status:
+          type: string
+          enum: [queued, running, completed, failed]
+        aspectRatio:
+          type: string
+          enum: ["1:1", "3:4", "3:2"]
+        error: { type: [string, "null"] }
+        responseId: { type: [string, "null"] }
+        model: { type: string }
+        contentType: { type: [string, "null"] }
+        contentLength: { type: [integer, "null"] }
+        contentHash: { type: [string, "null"] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        completedAt: { type: [string, "null"], format: date-time }
+        lastAccessedAt: { type: [string, "null"], format: date-time }
+        expiresAt: { type: [string, "null"], format: date-time }
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error: { type: string }
+  responses:
+    Error:
+      description: Request error
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    Unauthorized:
+      description: Missing or invalid bearer token
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"

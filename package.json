@@ -1,0 +1,31 @@
+{
+  "name": "codex-artifact-server",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A local HTTP service for durable Codex text and image artifact jobs.",
+  "license": "MIT",
+  "author": "Mihir Sathe",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/satmihir/codex-artifact-server.git"
+  },
+  "homepage": "https://github.com/satmihir/codex-artifact-server#readme",
+  "bugs": {
+    "url": "https://github.com/satmihir/codex-artifact-server/issues"
+  },
+  "bin": {
+    "codex-artifact-server": "./src/server.mjs"
+  },
+  "scripts": {
+    "start": "node src/server.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "check": "node --check src/server.mjs && node --check src/codex-runner.mjs && node --check src/job-store.mjs && node --check src/scheduler.mjs"
+  },
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "dependencies": {
+    "@openai/codex-sdk": "^0.146.0"
+  }
+}
