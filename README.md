@@ -20,7 +20,9 @@ Alternatively, copy `.env.example` into your process manager's environment;
 the server deliberately does not load parent-project environment files.
 
 Codex uses the local machine's existing Codex authentication. The server does
-not accept or require an OpenAI API key.
+not accept or require an OpenAI API key. **This means every request it serves is
+authenticated as your own Codex/ChatGPT account — please read [Account terms and
+intended use](#account-terms-and-intended-use) before running it.**
 
 Configuration:
 
@@ -86,11 +88,47 @@ If a client does not acknowledge a terminal job, garbage collection removes it
 after its `expiresAt` time. Reading a result extends that expiry so an interrupted
 download can be retried safely.
 
+## Account terms and intended use
+
+This server does not use an OpenAI API key. It drives the Codex CLI and SDK
+already installed on the machine, so every request it serves runs as *your*
+Codex/ChatGPT account and consumes that account's entitlements.
+
+Please take that seriously rather than as boilerplate. Putting an HTTP interface
+in front of those credentials turns a personal, interactive subscription into a
+programmatic API, which is not what a consumer plan is sold as. Depending on how
+it is deployed, that can breach the terms governing your OpenAI account.
+
+Use it as a local convenience for yourself, on your own machine. Do not:
+
+- expose it to other people, a shared network, or the public internet;
+- use it to provide a service to third parties, or resell its output;
+- use it to work around API pricing, quotas, or rate limits;
+- run it as backing infrastructure for a product or a commercial deployment.
+
+If you need programmatic access for an application, use the OpenAI platform API
+with your own API key and the commercial terms that come with it. That is the
+supported path, and this project is not a substitute for it.
+
+You are responsible for your own compliance. Consult the terms and policies that
+apply to your account:
+
+- <https://openai.com/policies/terms-of-use/>
+- <https://openai.com/policies/usage-policies/>
+
+This project is not affiliated with OpenAI, and nothing here is legal advice.
+
 ## Security boundary
 
-This is not an internet-ready multi-tenant service. Do not bind it to a public
-interface without adding TLS, durable identity-based authentication, rate
-limits, tenant-isolated storage, audit logging, and a stricter request policy.
+This is not an internet-ready multi-tenant service. It lacks TLS, durable
+identity-based authentication, rate limits, tenant-isolated storage, audit
+logging, and a strict request policy.
+
+Building those in would not make exposing it acceptable, because the blocker is
+not only technical: the credentials behind it are a personal Codex/ChatGPT
+account, as described in [Account terms and intended
+use](#account-terms-and-intended-use). Treat `127.0.0.1` as the intended and only
+deployment.
 
 The image endpoint is an adapter over a local Codex agent using its available
 image-generation capability. It is not an implementation of the OpenAI Images
