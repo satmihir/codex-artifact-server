@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { createHash, randomUUID } from "node:crypto";
+import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
 import { realpathSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { createServer } from "node:http";
@@ -108,11 +108,16 @@ function publicJob(job) {
   };
 }
 
+const IMAGE_EXTENSIONS = new Map([
+  ["image/jpeg", "jpg"],
+  ["image/png", "png"],
+  ["image/webp", "webp"],
+]);
+
 function extensionFor(contentType) {
-  if (contentType === "image/jpeg") return "jpg";
-  if (contentType === "image/png") return "png";
-  if (contentType === "image/webp") return "webp";
-  throw new HttpError("Images must be JPEG, PNG, or WebP files.");
+  const extension = IMAGE_EXTENSIONS.get(contentType);
+  if (!extension) throw new HttpError("Images must be JPEG, PNG, or WebP files.");
+  return extension;
 }
 
 function terminal(status) {
@@ -129,6 +134,20 @@ export async function createArtifactServer(options = {}) {
   );
   const token = options.token ?? process.env.CODEX_ARTIFACT_TOKEN;
   if (!token) throw new Error("CODEX_ARTIFACT_TOKEN is required.");
+
+  // Compare digests rather than the header itself: equal-length inputs let the
+  // comparison run in constant time and leak nothing about the token.
+  const expectedAuthorization = createHash("sha256")
+    .update(`Bearer ${token}`)
+    .digest();
+
+  function authorized(header) {
+    if (typeof header !== "string") return false;
+    return timingSafeEqual(
+      createHash("sha256").update(header).digest(),
+      expectedAuthorization,
+    );
+  }
 
   const model =
     options.model ?? (process.env.CODEX_ARTIFACT_MODEL?.trim() || undefined);
@@ -242,7 +261,7 @@ export async function createArtifactServer(options = {}) {
 
   const server = createServer(async (request, response) => {
     try {
-      if (request.headers.authorization !== `Bearer ${token}`) {
+      if (!authorized(request.headers.authorization)) {
         throw new HttpError("Unauthorized.", 401);
       }
       const url = new URL(request.url ?? "/", `http://${host}`);
@@ -387,10 +406,13 @@ export async function createArtifactServer(options = {}) {
             lastAccessedAt: new Date().toISOString(),
             expiresAt: expireAt(),
           });
+          const contentType = job.contentType || "image/png";
           response.writeHead(200, {
-            "content-type": job.contentType || "image/png",
+            "content-type": contentType,
             "content-length": bytes.byteLength,
-            "content-disposition": `inline; filename="${id}.png"`,
+            "content-disposition": `inline; filename="${id}.${
+              IMAGE_EXTENSIONS.get(contentType) ?? "png"
+            }"`,
             etag: `"sha256-${job.contentHash}"`,
             "cache-control": "private, no-store",
           });

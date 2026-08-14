@@ -37,14 +37,16 @@ test("serves text, durable image bytes, explicit deletion, and GC", async () => 
       };
     },
     async generateImage({ job, inputPaths, outputPath }) {
-      assert.equal(job.aspectRatio, "3:4");
-      assert.equal(inputPaths.length, 1);
-      assert.deepEqual(await readFile(inputPaths[0]), Buffer.from("reference"));
+      if (job.id === "image_test") {
+        assert.equal(job.aspectRatio, "3:4");
+        assert.equal(inputPaths.length, 1);
+        assert.deepEqual(await readFile(inputPaths[0]), Buffer.from("reference"));
+      }
       await writeFile(outputPath, png);
       return {
         responseId: "thread_image",
         model: "codex-sdk/test",
-        contentType: "image/png",
+        contentType: job.id === "image_jpeg" ? "image/jpeg" : "image/png",
       };
     },
   };
@@ -64,6 +66,15 @@ test("serves text, durable image bytes, explicit deletion, and GC", async () => 
 
     const unauthorized = await fetch(`${baseUrl}/v1/health`);
     assert.equal(unauthorized.status, 401);
+
+    // A token of a different length must be rejected rather than crash the
+    // constant-time comparison, which requires equal-length inputs.
+    for (const wrong of [`Bearer ${"x".repeat(token.length)}`, "Bearer short", token]) {
+      const rejected = await fetch(`${baseUrl}/v1/health`, {
+        headers: { authorization: wrong },
+      });
+      assert.equal(rejected.status, 401, `expected 401 for ${wrong}`);
+    }
 
     const health = await fetch(`${baseUrl}/v1/health`, {
       headers: { authorization: `Bearer ${token}` },
@@ -113,6 +124,10 @@ test("serves text, durable image bytes, explicit deletion, and GC", async () => 
     });
     assert.equal(result.status, 200);
     assert.equal(result.headers.get("content-type"), "image/png");
+    assert.equal(
+      result.headers.get("content-disposition"),
+      'inline; filename="image_test.png"',
+    );
     assert.deepEqual(Buffer.from(await result.arrayBuffer()), png);
     await new Promise((resolve) => setImmediate(resolve));
 
@@ -127,6 +142,26 @@ test("serves text, durable image bytes, explicit deletion, and GC", async () => 
       })).status,
       404,
     );
+
+    // The download filename has to follow the artifact's own content type.
+    const jpegForm = new FormData();
+    jpegForm.set("id", "image_jpeg");
+    jpegForm.set("prompt", "Create a JPEG artifact.");
+    await fetch(`${baseUrl}/v1/images`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${token}` },
+      body: jpegForm,
+    });
+    assert.equal((await waitForJob(baseUrl, "image_jpeg")).status, "completed");
+    const jpegResult = await fetch(`${baseUrl}/v1/jobs/image_jpeg/result`, {
+      headers: { authorization: `Bearer ${token}` },
+    });
+    assert.equal(jpegResult.headers.get("content-type"), "image/jpeg");
+    assert.equal(
+      jpegResult.headers.get("content-disposition"),
+      'inline; filename="image_jpeg.jpg"',
+    );
+    await jpegResult.arrayBuffer();
 
     const gcForm = new FormData();
     gcForm.set("id", "image_gc");

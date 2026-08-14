@@ -11,7 +11,32 @@ working directory.
 
 ## Install and run
 
+Requires Node.js 22.13 or newer, and a working local Codex CLI installation.
+
+Run the published package without installing it:
+
 ```sh
+CODEX_ARTIFACT_TOKEN="replace-me" npx codex-artifact-server
+```
+
+Install it as a command instead:
+
+```sh
+npm install -g codex-artifact-server
+CODEX_ARTIFACT_TOKEN="replace-me" codex-artifact-server
+```
+
+Use it as a dependency of another local project:
+
+```sh
+npm install codex-artifact-server
+```
+
+To work on the source, clone the repository and run it from there:
+
+```sh
+git clone https://github.com/satmihir/codex-artifact-server.git
+cd codex-artifact-server
 npm install
 CODEX_ARTIFACT_TOKEN="replace-me" npm start
 ```
