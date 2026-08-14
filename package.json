@@ -1,6 +1,6 @@
 {
   "name": "codex-artifact-server",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "A local HTTP service for durable Codex text and image artifact jobs.",
   "license": "MIT",
   "author": "Mihir Sathe",
