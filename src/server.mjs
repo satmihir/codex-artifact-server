@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 
 import { createHash, randomUUID } from "node:crypto";
+import { realpathSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { pathToFileURL } from "node:url";
 import { createCodexRunner } from "./codex-runner.mjs";
 import { FileJobStore, validJobId } from "./job-store.mjs";
 import { createBoundedScheduler } from "./scheduler.mjs";
@@ -479,6 +480,17 @@ async function main() {
   process.on("SIGTERM", () => void close());
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+// npm installs bin entries as symlinks, so the invoked path must be resolved to
+// its real location before it can be compared against this module's URL.
+function invokedDirectly() {
+  if (!process.argv[1]) return false;
+  try {
+    return pathToFileURL(realpathSync(process.argv[1])).href === import.meta.url;
+  } catch {
+    return false;
+  }
+}
+
+if (invokedDirectly()) {
   await main();
 }

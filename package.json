@@ -1,7 +1,6 @@
 {
   "name": "codex-artifact-server",
   "version": "0.1.0",
-  "private": true,
   "description": "A local HTTP service for durable Codex text and image artifact jobs.",
   "license": "MIT",
   "author": "Mihir Sathe",
@@ -17,6 +16,18 @@
   "bin": {
     "codex-artifact-server": "./src/server.mjs"
   },
+  "files": [
+    "src",
+    "openapi.yaml",
+    ".env.example"
+  ],
+  "keywords": [
+    "codex",
+    "artifact",
+    "server",
+    "image-generation",
+    "localhost"
+  ],
   "scripts": {
     "start": "node src/server.mjs",
     "test": "node --test tests/*.test.mjs",
